@@ -1,0 +1,8 @@
+examples/.cache
+node_modules
+dist
+esm
+*/**/expected
+examples/**
+__tests__/client.ts
+packages/farrow-pipeline/__tests__/compose.test.js
