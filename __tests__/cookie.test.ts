@@ -2,9 +2,10 @@ import { cookieSessionParser, cookieSessionStore, CookieOptions } from '../src/c
 import { Response, Http } from 'farrow-http'
 import { oneMinute } from '../src/utils'
 import type { RequestInfo } from 'farrow-http'
-import type { Cookies, ResponseInfo } from 'farrow-http/dist/responseInfo'
+import type { ResponseInfo } from 'farrow-http/dist/responseInfo'
 import { ulid } from 'ulid'
 import request from 'supertest'
+import { jest } from '@jest/globals'
 
 const defaultCookieOptions: CookieOptions = {
   maxAge: 30 * 60 * 1000,
@@ -95,7 +96,12 @@ describe('cookieSessionParser', () => {
   })
 
   describe('customCodec', () => {
-    test('should use custom codec for encoding and decoding session ID', async () => {
+    test('should use custom codec for encoding and decoding', async () => {
+      const customCodec = {
+        encode: jest.fn(() => 'CUSTOM_ENCODED_ID'),
+        decode: jest.fn(() => 'test-session-id'),
+      }
+
       const mockRequestInfo = {
         cookies: {
           'sess:k': 'CUSTOM_ENCODED_ID',
@@ -105,12 +111,8 @@ describe('cookieSessionParser', () => {
         headers: {},
         query: {},
         body: null,
+        search: '',
       } as RequestInfo
-
-      const customCodec = {
-        encode: jest.fn().mockReturnValue('CUSTOM_ENCODED_ID'),
-        decode: jest.fn().mockReturnValue('test-session-id'),
-      }
 
       const parser = cookieSessionParser({
         sessionIdKey: 'sess:k',

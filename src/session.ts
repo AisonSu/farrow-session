@@ -131,13 +131,16 @@ export const createFarrowSession = <D>(config: SessionConfig<D>): Middleware<Req
       }
     }
     const response = await next()
-
-    if (autoSave && sessionIdCtx.get()) {
-      await sessionStore.set(sessionIdCtx.get()!, sessionCtx.get())
+    const sessionId = sessionIdCtx.get()
+    if (autoSave && sessionId) {
+      await sessionStore.set(sessionId, sessionCtx.get())
     }
 
     const sessionHeaders = sessionHeaderCtx.get()
-    return response.merge(...sessionHeaders)
+    sessionHeaders.forEach((header) => {
+      console.log(header.info)
+    })
+    return Response.merge(...sessionHeaders).merge(response)
   }
 
   sessionCtx.regenerateId = async () => {

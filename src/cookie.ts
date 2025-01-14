@@ -1,10 +1,9 @@
-import { createCipheriv, Cipher, createHash } from 'crypto'
+import { createCipheriv, createDecipheriv, createHash } from 'crypto'
 import type { SetOption } from 'cookies'
 import { sessionHeaderCtx, SessionStore, SessionParser } from './session'
 import { Response, useRequestInfo } from 'farrow-http'
 import { ulid } from 'ulid'
 import { oneMinute } from './utils'
-import { createContext } from 'farrow-pipeline'
 export type CookieOptions = Omit<SetOption, 'expires' | 'secureProxy' | 'signed' | 'secure'>
 const defaultCookieOptions = {
   maxAge: 30 * oneMinute * 1000,
@@ -46,8 +45,9 @@ export const cookieSessionParser = (cookieSessionOptions?: CookieSessionParserOp
     },
   }
 }
-export type CookieSessionStoreOptions = {
+export type CookieSessionStoreOptions<D> = {
   sessionStoreKey: string
+  dataCreator: (sessionId: string) => D
   expiresOptions: {
     rolling: boolean
     time: number
@@ -55,31 +55,33 @@ export type CookieSessionStoreOptions = {
   cookieOptions: CookieOptions
 }
 function idToIv(sessionId: string) {
-  const hash = createHash('sha256').update(sessionId).digest()
-  const iv = hash.subarray(0, 16).toString('hex')
-  return iv
+  return createHash('sha256').update(sessionId).digest().slice(0, 16)
 }
-export const cookieSessionStore = <D>(cookieSessionStoreOptions?: CookieSessionStoreOptions): SessionStore<D> => {
+export const cookieSessionStore = <D>(
+  cookieSessionStoreOptions?: Partial<CookieSessionStoreOptions<D>>,
+): SessionStore<D> => {
   const options = {
     sessionStoreKey: 'sess:s',
     cookieOptions: defaultCookieOptions,
     expiresOptions: {
-      rolling: true,
+      rolling: false,
       time: 30 * oneMinute * 1000,
     },
     ...cookieSessionStoreOptions,
   }
-  const CipherContext = createContext<Cipher | null>(null)
+  const key = createHash('sha256').update(options.sessionStoreKey).digest()
   const createCipher = (sessionId: string) => {
     try {
-      const cipherKey = createHash('sha256').update(options.sessionStoreKey).digest('hex')
-      const cipher = createCipheriv('aes-256-cbc', cipherKey, idToIv(sessionId))
-      CipherContext.set(cipher)
+      const cipher = createCipheriv('aes-256-cbc', key, idToIv(sessionId))
       return cipher
     } catch (err) {
       const error = err as Error
       throw new Error(`Failed to create cipher: ${error.message}`)
     }
+  }
+  const createDecipher = (sessionId: string) => {
+    const decipher = createDecipheriv('aes-256-cbc', key, idToIv(sessionId))
+    return decipher
   }
 
   return {
@@ -88,7 +90,7 @@ export const cookieSessionStore = <D>(cookieSessionStoreOptions?: CookieSessionS
       createCipher(sessionId)
       return {
         sessionId,
-        sessionData: {} as D,
+        sessionData: options.dataCreator ? options.dataCreator(sessionId) : ({} as D),
       }
     },
     async get(sessionId) {
@@ -98,16 +100,15 @@ export const cookieSessionStore = <D>(cookieSessionStoreOptions?: CookieSessionS
       if (sessionData === undefined) {
         return undefined
       }
-      // 如果cipher不存在，则创建新的cipher
-      let cipher = CipherContext.get()
-      if (cipher === null) {
-        cipher = createCipher(sessionId)
-      }
+      console.log('sessionData found in cookie', sessionData)
       // 解密sessionData
+      const decipher = createDecipher(sessionId)
       try {
-        const decrypted = cipher.update(sessionData, 'base64', 'utf8')
+        let decrypted = decipher.update(sessionData, 'base64', 'utf8')
+        decrypted += decipher.final('utf8')
+        console.log('decrypted', decrypted)
         const decryptedData = JSON.parse(decrypted)
-
+        console.log('decryptedData', decryptedData)
         // 检查session是否过期
         const now = Date.now()
         if (decryptedData._expires && decryptedData._expires < now) {
@@ -128,11 +129,8 @@ export const cookieSessionStore = <D>(cookieSessionStoreOptions?: CookieSessionS
       }
     },
     async set(sessionId, sessionData) {
-      let cipher = CipherContext.get()
-      if (cipher === null) {
-        cipher = createCipher(sessionId)
-      }
-      const encrypted = cipher.update(
+      const cipher = createCipher(sessionId)
+      let encrypted = cipher.update(
         JSON.stringify({
           ...sessionData,
           _expires: Date.now() + options.expiresOptions.time,
@@ -140,6 +138,7 @@ export const cookieSessionStore = <D>(cookieSessionStoreOptions?: CookieSessionS
         'utf8',
         'base64',
       )
+      encrypted += cipher.final('base64')
       const cookieOptions = {
         ...options.cookieOptions,
         maxAge: options.expiresOptions.time,
