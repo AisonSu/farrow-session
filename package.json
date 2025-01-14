@@ -1,5 +1,5 @@
 {
-  "name": "farrow-session",
+  "name": "@aisonren/farrow-session",
   "version": "1.0.0",
   "description": "A flexible and decoupled session middleware for Farrow framework",
   "main": "./dist/index.cjs",
@@ -75,5 +75,8 @@
   },
   "dependencies": {
     "ulid": "^2.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

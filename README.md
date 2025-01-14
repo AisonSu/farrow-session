@@ -407,4 +407,4 @@ http.use('/api', userSession)
 
 ## License
 
-ISC
+MIT
