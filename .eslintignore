@@ -6,3 +6,4 @@ esm
 examples/**
 __tests__/client.ts
 packages/farrow-pipeline/__tests__/compose.test.js
+.eslintrc

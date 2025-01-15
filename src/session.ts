@@ -15,18 +15,15 @@ export type SessionStore<D> = {
    */
   get(sessionId: string): Promise<D | undefined>
   /**
-   * 传入session,如果需要更新元数据（SessionId或者过期时间）则返回Session<D>，否则返回undefined
-   *
-   * Input session, if the session exists, update the metadata (SessionId or expiration time etc.) and return the Session<D>, otherwise return undefined.
-   *
+   * 传入sessionId和sessionData,返回是否成功更新session
    * @param sessionId
    * @param sessionData
    */
   set(sessionId: string, sessionData: D): Promise<boolean>
   /**
-   * 传入sessionId和Data,返回生成的session
+   * 传入sessionId和Data,返回生成的session,如果失败,返回false
    *
-   * Input sessionId and sessionData, return the generated session.
+   * Input sessionId and sessionData, return the generated session, if failed, return false
    */
   create(): Promise<{ sessionId: string; sessionData: D } | false>
   /**

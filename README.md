@@ -18,13 +18,13 @@ A session middleware for [Farrow](https://github.com/farrow-js/farrow) framework
 
 ```bash
 # pnpm
-pnpm add farrow-session
+pnpm add @aisonren/farrow-session
 
 # npm
-npm install farrow-session
+npm install @aisonren/farrow-session
 
 # yarn
-yarn add farrow-session
+yarn add @aisonren/farrow-session
 ```
 
 ## Architecture
@@ -47,7 +47,7 @@ This decoupled design allows you to:
 
 ```typescript
 import { Http } from 'farrow-http'
-import { createSessionCtx, cookieSessionParser, cookieSessionStore } from 'farrow-session'
+import { createSessionCtx, cookieSessionParser, cookieSessionStore } from '@aisonren/farrow-session'
 
 // Create session context
 const sessionCtx = createSessionCtx<{ userId?: string }>({ userId: undefined })
@@ -88,7 +88,7 @@ http.use(session)
 You can implement your own session parser to get/set session IDs from different sources:
 
 ```typescript
-import { SessionParser } from 'farrow-session'
+import { SessionParser } from '@aisonren/farrow-session'
 
 // Example: Header-based session parser
 const headerSessionParser: SessionParser = {
@@ -113,7 +113,7 @@ const headerSessionParser: SessionParser = {
 For better security, you should implement your own session store using a database:
 
 ```typescript
-import { SessionStore } from 'farrow-session'
+import { SessionStore } from '@aisonren/farrow-session'
 import { Redis } from 'ioredis'
 
 // Example: Redis-based session store
@@ -228,13 +228,13 @@ http.use('/api', userSession)
 
 ```bash
 # pnpm
-pnpm add farrow-session
+pnpm add @aisonren/farrow-session
 
 # npm
-npm install farrow-session
+npm install @aisonren/farrow-session
 
 # yarn
-yarn add farrow-session
+yarn add @aisonren/farrow-session
 ```
 
 ## 使用说明
@@ -243,7 +243,7 @@ yarn add farrow-session
 
 ```typescript
 import { Http } from 'farrow-http'
-import { createSessionCtx, cookieSessionParser, cookieSessionStore } from 'farrow-session'
+import { createSessionCtx, cookieSessionParser, cookieSessionStore } from '@aisonren/farrow-session'
 
 // 创建会话上下文
 const sessionCtx = createSessionCtx<{ userId?: string }>({ userId: undefined })
@@ -324,7 +324,7 @@ const parser = cookieSessionParser({
 你可以为会话数据提供自定义的存储方案：
 
 ```typescript
-import { SessionStore } from 'farrow-session'
+import { SessionStore } from '@aisonren/farrow-session'
 import { Redis } from 'ioredis'
 
 // Example: Redis-based session store
