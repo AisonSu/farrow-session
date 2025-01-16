@@ -11,14 +11,16 @@ const defaultCookieOptions = {
   overwrite: true,
 } satisfies CookieOptions
 export type CookieSessionParserOptions = {
-  sessionIdKey: string
+  sessionInfoKey?: string
   customCodec?: {
     encode: (plainSessionId: string) => string
     decode: (encodedSessionId: string) => string
   }
-  cookieOptions: CookieOptions
+  cookieOptions?: CookieOptions
 }
-export const cookieSessionParser = <I, M>(cookieSessionOptions?: CookieSessionParserOptions): SessionParser<I, M> => {
+export const cookieSessionParser = <Info, Meta>(
+  cookieSessionOptions?: CookieSessionParserOptions,
+): SessionParser<Info, Meta> => {
   const options = {
     sessionInfoKey: 'sess:k',
     cookieOptions: defaultCookieOptions,
@@ -34,7 +36,7 @@ export const cookieSessionParser = <I, M>(cookieSessionOptions?: CookieSessionPa
         ? options.customCodec.decode(encodedSessionInfo)
         : Buffer.from(encodedSessionInfo, 'base64').toString('utf8')
       try {
-        const sessionInfo = JSON.parse(decodedSessionInfo) as I
+        const sessionInfo = JSON.parse(decodedSessionInfo) as Info
         return sessionInfo
       } catch {
         return null
@@ -76,12 +78,12 @@ export type CookieSessionStoreOptions<D> = {
   }
   cookieOptions: CookieOptions
 }
-function idToIv(sessionId: string) {
+export function idToIv(sessionId: string) {
   return createHash('sha256').update(sessionId).digest().slice(0, 16)
 }
-export const cookieSessionStore = <D>(
-  cookieSessionStoreOptions?: Partial<CookieSessionStoreOptions<D>>,
-): SessionStore<D, string, string> => {
+export const cookieSessionStore = <Data>(
+  cookieSessionStoreOptions?: Partial<CookieSessionStoreOptions<Data>>,
+): SessionStore<Data, string, string> => {
   const options = {
     sessionStoreKey: 'sess:s',
     cookieOptions: defaultCookieOptions,
@@ -112,30 +114,27 @@ export const cookieSessionStore = <D>(
       createCipher(sessionId)
       return {
         sessionMeta: sessionId,
-        sessionData: options.dataCreator ? options.dataCreator(request, sessionData) : ({} as D),
+        sessionData: options.dataCreator ? options.dataCreator(request, sessionData) : ({} as Data),
       }
     },
     async get(sessionId) {
       const requestInfo = useRequestInfo()
       const sessionData = requestInfo.cookies?.[options.sessionStoreKey]
-      // 如果sessionData不存在，则返回undefined
+      // 如果sessionData不存在，则返回null
       if (sessionData === undefined) {
-        return undefined
+        return null
       }
-      console.log('sessionData found in cookie', sessionData)
       // 解密sessionData
       const decipher = createDecipher(sessionId)
       try {
         let decrypted = decipher.update(sessionData, 'base64', 'utf8')
         decrypted += decipher.final('utf8')
-        console.log('decrypted', decrypted)
         const decryptedData = JSON.parse(decrypted)
-        console.log('decryptedData', decryptedData)
         // 检查session是否过期
         const now = Date.now()
         if (decryptedData._expires && decryptedData._expires < now) {
           await this.destroy(sessionId)
-          return undefined
+          return null
         }
 
         // 如果rolling为true,则更新过期时间
@@ -150,8 +149,8 @@ export const cookieSessionStore = <D>(
 
         return decryptedData
       } catch {
-        // 如果解密失败(可能sessionData不存在，或者sessionData被篡改)，返回 undefined
-        return undefined
+        // 如果解密失败(可能sessionData不存在，或者sessionData被篡改)，返回 null
+        return null
       }
     },
     async set(sessionId, sessionData) {

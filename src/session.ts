@@ -133,7 +133,6 @@ export const createFarrowSession = <D, I, M>(
       sessionHeaderCtx.set([...sessionHeaderCtx.get(), sessionHeader])
     } else {
       const verifiedResult = await sessionStore.get(unverifiedSessionInfo)
-
       // if get sessionData failed with undefined,means internal error,return 500 error
       if (verifiedResult === undefined) return Response.json({ error: 'Internal Server Error' }).status(500)
 
