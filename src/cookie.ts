@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash } from 'crypto'
 import type { SetOption } from 'cookies'
 import { sessionHeaderCtx, SessionStore, SessionParser } from './session'
-import { Response, useRequestInfo } from 'farrow-http'
+import { Response, useRequestInfo, RequestInfo } from 'farrow-http'
 import { ulid } from 'ulid'
 import { oneMinute } from './utils'
 export type CookieOptions = Omit<SetOption, 'expires' | 'secureProxy' | 'signed' | 'secure'>
@@ -18,39 +18,61 @@ export type CookieSessionParserOptions = {
   }
   cookieOptions: CookieOptions
 }
-export const cookieSessionParser = (cookieSessionOptions?: CookieSessionParserOptions): SessionParser => {
+export const cookieSessionParser = <I, M>(cookieSessionOptions?: CookieSessionParserOptions): SessionParser<I, M> => {
   const options = {
-    sessionIdKey: 'sess:k',
+    sessionInfoKey: 'sess:k',
     cookieOptions: defaultCookieOptions,
     ...cookieSessionOptions,
   }
   return {
     async get(requestInfo) {
-      const encodedSessionId = requestInfo.cookies?.[options.sessionIdKey]
-      if (encodedSessionId === undefined) {
-        return undefined
+      const encodedSessionInfo = requestInfo.cookies?.[options.sessionInfoKey]
+      if (encodedSessionInfo === undefined) {
+        return null
       }
-      return options.customCodec
-        ? options.customCodec.decode(encodedSessionId)
-        : Buffer.from(encodedSessionId, 'base64').toString('utf8')
+      const decodedSessionInfo = options.customCodec
+        ? options.customCodec.decode(encodedSessionInfo)
+        : Buffer.from(encodedSessionInfo, 'base64').toString('utf8')
+      try {
+        const sessionInfo = JSON.parse(decodedSessionInfo) as I
+        return sessionInfo
+      } catch {
+        return null
+      }
     },
-    async set(plainSessionId) {
-      const encodedSessionId = options.customCodec
-        ? options.customCodec.encode(plainSessionId)
-        : Buffer.from(plainSessionId).toString('base64')
-      return Response.cookie(options.sessionIdKey, encodedSessionId, options.cookieOptions)
+    async set(plainSessionMeta) {
+      const encodedSessionMeta = JSON.stringify(plainSessionMeta)
+      const encodedSessionInfo = options.customCodec
+        ? options.customCodec.encode(encodedSessionMeta)
+        : Buffer.from(encodedSessionMeta).toString('base64')
+      const expireTime =
+        (
+          plainSessionMeta as {
+            expireTime?: string | number
+          }
+        ).expireTime ??
+        (
+          plainSessionMeta as {
+            expiresTime?: string | number
+          }
+        ).expiresTime ??
+        options.cookieOptions.maxAge
+      return Response.cookie(options.sessionInfoKey, encodedSessionInfo, {
+        ...options.cookieOptions,
+        maxAge: Number(expireTime),
+      })
     },
     async remove() {
-      return Response.cookie(options.sessionIdKey, '', { ...options.cookieOptions, maxAge: -1 })
+      return Response.cookie(options.sessionInfoKey, '', { ...options.cookieOptions, maxAge: -1 })
     },
   }
 }
 export type CookieSessionStoreOptions<D> = {
   sessionStoreKey: string
-  dataCreator: (sessionId: string) => D
+  dataCreator: (request: RequestInfo, sessionData?: D) => D
   expiresOptions: {
     rolling: boolean
-    time: number
+    time: number | (() => number)
   }
   cookieOptions: CookieOptions
 }
@@ -59,7 +81,7 @@ function idToIv(sessionId: string) {
 }
 export const cookieSessionStore = <D>(
   cookieSessionStoreOptions?: Partial<CookieSessionStoreOptions<D>>,
-): SessionStore<D> => {
+): SessionStore<D, string, string> => {
   const options = {
     sessionStoreKey: 'sess:s',
     cookieOptions: defaultCookieOptions,
@@ -85,12 +107,12 @@ export const cookieSessionStore = <D>(
   }
 
   return {
-    async create() {
+    async create(request, sessionData) {
       const sessionId = ulid()
       createCipher(sessionId)
       return {
-        sessionId,
-        sessionData: options.dataCreator ? options.dataCreator(sessionId) : ({} as D),
+        sessionMeta: sessionId,
+        sessionData: options.dataCreator ? options.dataCreator(request, sessionData) : ({} as D),
       }
     },
     async get(sessionId) {
@@ -118,7 +140,11 @@ export const cookieSessionStore = <D>(
 
         // 如果rolling为true,则更新过期时间
         if (options.expiresOptions.rolling) {
-          decryptedData._expires = now + options.expiresOptions.time
+          const expireTime =
+            typeof options.expiresOptions.time === 'function'
+              ? options.expiresOptions.time()
+              : options.expiresOptions.time
+          decryptedData._expires = now + expireTime
           await this.set(sessionId, decryptedData)
         }
 
@@ -130,10 +156,12 @@ export const cookieSessionStore = <D>(
     },
     async set(sessionId, sessionData) {
       const cipher = createCipher(sessionId)
+      const expireTime =
+        typeof options.expiresOptions.time === 'function' ? options.expiresOptions.time() : options.expiresOptions.time
       let encrypted = cipher.update(
         JSON.stringify({
           ...sessionData,
-          _expires: Date.now() + options.expiresOptions.time,
+          _expires: Date.now() + expireTime,
         }),
         'utf8',
         'base64',
@@ -141,7 +169,7 @@ export const cookieSessionStore = <D>(
       encrypted += cipher.final('base64')
       const cookieOptions = {
         ...options.cookieOptions,
-        maxAge: options.expiresOptions.time,
+        maxAge: expireTime,
       }
 
       sessionHeaderCtx.set([
@@ -150,7 +178,7 @@ export const cookieSessionStore = <D>(
       ])
       return true
     },
-    async destroy(sessionId) {
+    async destroy() {
       sessionHeaderCtx.set([
         ...sessionHeaderCtx.get(),
         Response.cookie(options.sessionStoreKey, '', { ...options.cookieOptions, maxAge: -1 }),
