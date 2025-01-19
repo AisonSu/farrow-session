@@ -76,7 +76,7 @@ const sessionCtx = createSessionCtx<{ userId?: string }>({ userId: undefined })
 const parser = cookieSessionParser({
   sessionIdKey: 'sess:id',
   cookieOptions: {
-    maxAge: 24 * 60 * 60 * 1000, // 24小时，当parser.set接受的sessionMeta中expiresTime/expireTime存在时，会使用该值作为maxAge
+    maxAge: 24 * 60 * 60 * 1000, // 24小时，当parser.set接受的sessionMeta中expiresTime/expireTime存在时，会使用该值作为cookie的expires而不使用maxAge
     httpOnly: true,
   },
 })
@@ -86,10 +86,10 @@ const store = cookieSessionStore({
   sessionStoreKey: 'sess:store',
   expiresOptions: {
     rolling: true,
-    time: 24 * 60 * 60 * 1000, // 24小时
+    time: 24 * 60 * 60 * 1000, // 当该值存在时，会使用该值作为cookie的maxAge而不使用cookieOptions中的maxAge,该值可以是一个函数，返回一个时间戳
   },
   cookieOptions: {
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: 24 * 60 * 60 * 1000, // 当expiresOptions.time不存在时，会使用该值作为cookie的maxAge
     httpOnly: true,
   },
 })

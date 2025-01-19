@@ -76,7 +76,7 @@ const sessionCtx = createSessionCtx<{ userId?: string }>({ userId: undefined })
 const parser = cookieSessionParser({
   sessionIdKey: 'sess:id',
   cookieOptions: {
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours, when expiresTime/expireTime exists in sessionMeta passed to parser.set, it will be used as maxAge
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours, when expiresTime/expireTime exists in sessionMeta passed to parser.set, it will be used as cookie's expires and ignore maxAge
     httpOnly: true,
   },
 })
@@ -86,7 +86,7 @@ const store = cookieSessionStore({
   sessionStoreKey: 'sess:store',
   expiresOptions: {
     rolling: true,
-    time: 24 * 60 * 60 * 1000, // 24 hours
+    time: 24 * 60 * 60 * 1000, // 24 hours, when expiresTime/expireTime exists in sessionMeta passed to parser.set, it will be used as cookie's expires and ignore maxAge
   },
   cookieOptions: {
     maxAge: 24 * 60 * 60 * 1000,

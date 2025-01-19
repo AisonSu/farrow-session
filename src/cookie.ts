@@ -47,7 +47,7 @@ export const cookieSessionParser = <Info, Meta>(
       const encodedSessionInfo = options.customCodec
         ? options.customCodec.encode(encodedSessionMeta)
         : Buffer.from(encodedSessionMeta).toString('base64')
-      const expireTime =
+      const expiresTime =
         (
           plainSessionMeta as {
             expireTime?: string | number
@@ -57,11 +57,15 @@ export const cookieSessionParser = <Info, Meta>(
           plainSessionMeta as {
             expiresTime?: string | number
           }
-        ).expiresTime ??
-        options.cookieOptions.maxAge
+        ).expiresTime
+      const expiresOptions = expiresTime
+        ? { expires: new Date(Number(expiresTime)) }
+        : {
+            maxAge: options.cookieOptions.maxAge,
+          }
       return Response.cookie(options.sessionInfoKey, encodedSessionInfo, {
         ...options.cookieOptions,
-        maxAge: Number(expireTime),
+        ...expiresOptions,
       })
     },
     async remove() {
@@ -74,7 +78,10 @@ export type CookieSessionStoreOptions<D> = {
   dataCreator: (request: RequestInfo, sessionData?: D) => D
   expiresOptions: {
     rolling: boolean
-    time: number | (() => number)
+    /**
+     * when use time, it will override maxAge
+     */
+    time?: number | (() => number)
   }
   cookieOptions: CookieOptions
 }
@@ -89,10 +96,9 @@ export const cookieSessionStore = <Data>(
     cookieOptions: defaultCookieOptions,
     expiresOptions: {
       rolling: false,
-      time: 30 * oneMinute * 1000,
     },
     ...cookieSessionStoreOptions,
-  }
+  } as CookieSessionStoreOptions<Data>
   const key = createHash('sha256').update(options.sessionStoreKey).digest()
   const createCipher = (sessionId: string) => {
     try {
@@ -107,7 +113,11 @@ export const cookieSessionStore = <Data>(
     const decipher = createDecipheriv('aes-256-cbc', key, idToIv(sessionId))
     return decipher
   }
-
+  const maxAge = options.expiresOptions.time
+    ? typeof options.expiresOptions.time === 'function'
+      ? options.expiresOptions.time()
+      : options.expiresOptions.time
+    : options.cookieOptions.maxAge!
   return {
     async create(request, sessionData) {
       const sessionId = ulid()
@@ -139,11 +149,9 @@ export const cookieSessionStore = <Data>(
 
         // 如果rolling为true,则更新过期时间
         if (options.expiresOptions.rolling) {
-          const expireTime =
-            typeof options.expiresOptions.time === 'function'
-              ? options.expiresOptions.time()
-              : options.expiresOptions.time
-          decryptedData._expires = now + expireTime
+          // 判断time存不存在，如果存在，则使用time，否则使用maxAge；然后判断time是函数还是数字，如果是函数，则使用函数返回值，否则直接使用
+
+          decryptedData._expires = now + maxAge
           await this.set(sessionId, decryptedData)
         }
 
@@ -155,12 +163,10 @@ export const cookieSessionStore = <Data>(
     },
     async set(sessionId, sessionData) {
       const cipher = createCipher(sessionId)
-      const expireTime =
-        typeof options.expiresOptions.time === 'function' ? options.expiresOptions.time() : options.expiresOptions.time
       let encrypted = cipher.update(
         JSON.stringify({
           ...sessionData,
-          _expires: Date.now() + expireTime,
+          _expires: Date.now() + maxAge,
         }),
         'utf8',
         'base64',
@@ -168,7 +174,7 @@ export const cookieSessionStore = <Data>(
       encrypted += cipher.final('base64')
       const cookieOptions = {
         ...options.cookieOptions,
-        maxAge: expireTime,
+        maxAge: maxAge,
       }
 
       sessionHeaderCtx.set([
